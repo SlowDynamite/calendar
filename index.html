@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6fed">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Notizen">
+<title>Notizen &amp; Aufgaben</title>
+<style>
+:root{
+  --bg:#f4f5f8; --card:#fff; --text:#1b1f2a; --muted:#6b7385; --line:#e3e6ee;
+  --pri:#2f6fed; --pri-t:#fff; --danger:#d63a3a;
+  --c-Termin:#2f6fed; --c-Aufgabe:#1f9d63; --c-Geburtstag:#e0508f; --c-Ereignis:#8a54d6;
+  --nav-h:60px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#12141a;--card:#1c1f28;--text:#eceef4;--muted:#98a0b3;--line:#2c303c;--pri:#5b92ff;--pri-t:#0b1020;--danger:#ff6b6b;
+    --c-Termin:#5b92ff;--c-Aufgabe:#3fcf8e;--c-Geburtstag:#ff7db0;--c-Ereignis:#b48aff}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;outline:none}
+input:focus,textarea:focus{border-color:var(--pri)}
+textarea{min-height:110px;resize:vertical}
+h2,h4{margin:0}
+a{color:var(--pri);word-break:break-all}
+
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--card);border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0}
+.userbtn{font-size:13px;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:999px}
+main{flex:1;overflow-y:auto;padding:12px 14px calc(var(--nav-h) + 90px + env(safe-area-inset-bottom))}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--muted)}
+nav button span{font-size:22px;line-height:1}
+nav button.on{color:var(--pri);font-weight:600}
+.fab{position:fixed;right:18px;bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;background:var(--pri);color:var(--pri-t);font-size:30px;box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:6;display:flex;align-items:center;justify-content:center}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-size:14px;background:var(--card)}
+.chip.on{background:var(--pri);color:var(--pri-t);border-color:var(--pri)}
+.sec{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:16px 4px 6px}
+.sec.red{color:var(--danger)}
+.muted{color:var(--muted);font-size:14px}
+.empty{text-align:center;color:var(--muted);padding:30px 10px}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px;background:var(--card)}
+.seg button{flex:1;padding:8px;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--pri);color:var(--pri-t);font-weight:600}
+/* Kalender */
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.calhead h2{font-size:18px;text-transform:capitalize}
+.calhead button{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.dow{font-size:12px;text-align:center;color:var(--muted);padding:4px 0}
+.cell{aspect-ratio:1/1.05;background:var(--card);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:5px;font-size:15px}
+.cell.other{opacity:.4}
+.cell.today{border-color:var(--pri);font-weight:700}
+.cell.sel{background:var(--pri);color:var(--pri-t);border-color:var(--pri)}
+.dots{display:flex;gap:3px;margin-top:4px;height:7px}
+.dot{width:6px;height:6px;border-radius:50%}
+.cell.sel .dot{box-shadow:0 0 0 1px var(--pri-t)}
+
+/* Zeilen */
+.row{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--cc,var(--line));border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.row.done .rt{text-decoration:line-through;color:var(--muted)}
+.chk{flex:none;width:26px;height:26px;border:2px solid var(--cc,var(--muted));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:transparent;margin-top:1px}
+.row.done .chk{background:var(--cc);color:#fff}
+.rico{flex:none;width:26px;text-align:center;font-size:20px}
+.rb{flex:1;min-width:0}
+.rt{font-weight:600;word-break:break-word}
+.rm{font-size:13px;color:var(--muted)}
+.sub{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:15px}
+.sub input{width:20px;height:20px;padding:0;flex:none}
+.sub.d span{text-decoration:line-through;color:var(--muted)}
+.daytitle{font-weight:700;margin:14px 4px 8px;text-transform:capitalize}
+
+/* Notizen */
+.note{display:flex;gap:10px;cursor:pointer}
+.note .nb{flex:1;min-width:0}
+.note .nt{font-weight:700;word-break:break-word}
+.note .ns{color:var(--muted);font-size:14px;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;white-space:pre-wrap}
+.note img.th{width:70px;height:70px;object-fit:cover;border-radius:10px;flex:none;background:var(--line)}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);margin:4px 4px 0 0;color:var(--muted)}
+
+/* Modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-end}
+.sheet{background:var(--card);width:100%;max-height:96%;height:96%;border-radius:18px 18px 0 0;display:flex;flex-direction:column}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.sh h2{font-size:17px}
+.sh .x{font-size:22px;padding:4px 8px;color:var(--muted)}
+.pri{background:var(--pri);color:var(--pri-t);padding:9px 16px;border-radius:10px;font-weight:600}
+.sb{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+label.l{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.add{display:flex;gap:8px;margin-top:6px}
+.add button{flex:none;width:44px;border-radius:10px;background:var(--pri);color:var(--pri-t);font-size:22px}
+.sr{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.sr input[type=checkbox]{width:22px;height:22px;padding:0;flex:none}
+.sr button,.lr button{flex:none;color:var(--muted);font-size:18px;padding:4px 8px}
+.lr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.inl{display:flex;gap:10px;align-items:center;font-size:16px;color:var(--text);font-weight:500}
+.inl input{width:22px;height:22px;padding:0}
+.imgs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.imgs .im{position:relative;width:92px;height:92px}
+.imgs img{width:100%;height:100%;object-fit:cover;border-radius:10px;background:var(--line)}
+.imgs .im button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:14px}
+.btn2{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border:1px dashed var(--muted);border-radius:10px;color:var(--text)}
+.danger{color:var(--danger);border:1px solid var(--danger);border-radius:10px;padding:11px;text-align:center;font-weight:600}
+.hint{font-size:13px;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 90px);transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:90%;display:none;text-align:center}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:40;display:flex;align-items:center;justify-content:center}
+.lightbox img{max-width:100%;max-height:100%}
+
+/* Login */
+.login{max-width:380px;margin:0 auto;padding:calc(50px + env(safe-area-inset-top)) 20px 20px;display:flex;flex-direction:column;gap:12px}
+.login h1{margin:0 0 4px;font-size:26px}
+.login .sec2{background:none;border:1px solid var(--line);padding:11px;border-radius:10px}
+.err{color:var(--danger);font-size:14px;min-height:20px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===================================================================
+   KONFIGURATION
+   Trage hier deine Supabase-Daten ein (Dashboard -> Project Settings -> API).
+   Der "anon public"-Key darf im Code stehen; geschützt sind die Daten
+   durch Login + Row Level Security. NIEMALS den service_role-Key eintragen!
+   Lässt du die Platzhalter stehen, fragt die App beim ersten Start danach
+   und merkt sich die Eingabe nur auf diesem Handy.
+   =================================================================== */
+const SUPABASE_URL = 'https://DEIN-PROJEKT.supabase.co';
+const SUPABASE_ANON_KEY = 'DEIN-ANON-KEY';
+const EMAIL_DOMAIN = 'notizen-app.de';   // nur intern: Nutzername -> Pseudo-E-Mail
+const BUCKET = 'note-images';
+
+/* ---------- Helfer ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CATS = ['Termin', 'Aufgabe', 'Geburtstag', 'Ereignis'];
+const ICON = {Termin:'📅', Aufgabe:'✅', Geburtstag:'🎂', Ereignis:'⭐'};
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const fmtD = s => s ? parseD(s).toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'}) : '';
+const fmtTS = s => s ? new Date(s).toLocaleString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+const normLink = u => { u = (u || '').trim(); if (!u) return ''; return /^https?:\/\//i.test(u) ? u : 'https://' + u; };
+const safeHref = u => /^https?:\/\//i.test(u) ? u : '#';
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 4000); }
+
+/* ---------- Zustand ---------- */
+const CFG_KEY = 'notizen_cfg';
+let cfg = {};
+try { cfg = JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch (e) {}
+const usePlaceholder = SUPABASE_URL.includes('DEIN-');
+const cfgUrl = usePlaceholder ? cfg.url : SUPABASE_URL;
+const cfgKey = usePlaceholder ? cfg.key : SUPABASE_ANON_KEY;
+
+let sb = null;
+const S = {
+  user: null, name: '', tab: 'cal', items: [], notes: [],
+  month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  day: ymd(new Date()), cat: 'Alle', status: 'open', iq: '', itemTag: null, q: '', tag: null
+};
+const URLS = {};
+
+/* ---------- Start ---------- */
+async function boot() {
+  if (!cfgUrl || !cfgKey) return renderSetup();
+  sb = supabase.createClient(cfgUrl, cfgKey);
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) enter(session.user); else renderLogin();
+}
+
+function renderSetup() {
+  $('#app').innerHTML = `<div class="login">
+    <h1>Einrichtung</h1>
+    <p class="muted">Trage die Daten deines Supabase-Projekts ein (Project Settings → API). Nur den <b>anon public</b>-Key verwenden.</p>
+    <input id="s-url" placeholder="https://xxxx.supabase.co" autocapitalize="off">
+    <input id="s-key" placeholder="anon public key" autocapitalize="off">
+    <button class="pri" id="s-ok">Speichern</button>
+    <div class="err" id="s-err"></div></div>`;
+  $('#s-ok').onclick = () => {
+    const url = $('#s-url').value.trim(), key = $('#s-key').value.trim();
+    if (!/^https:\/\/.+\.supabase\.co\/?$/.test(url) || key.length < 20) { $('#s-err').textContent = 'Bitte gültige URL und Key eintragen.'; return; }
+    localStorage.setItem(CFG_KEY, JSON.stringify({ url, key }));
+    location.reload();
+  };
+}
+
+function renderLogin(msg = '') {
+  $('#app').innerHTML = `<form class="login" id="lf">
+    <h1>📝 Notizen &amp; Aufgaben</h1>
+    <p class="muted">Melde dich mit deinem Nutzernamen an.</p>
+    <input id="l-user" placeholder="Nutzername" autocomplete="username" autocapitalize="off" autocorrect="off">
+    <input id="l-pw" type="password" placeholder="Passwort (mind. 6 Zeichen)" autocomplete="current-password">
+    <button class="pri" type="submit">Anmelden</button>
+    <button class="sec2" type="button" id="l-reg">Neuen Nutzer registrieren</button>
+    <div class="err" id="l-err">${esc(msg)}</div></form>`;
+  const go = async (register) => {
+    const name = $('#l-user').value.trim(), pw = $('#l-pw').value;
+    if (!/^[a-z0-9._-]{2,20}$/i.test(name)) { $('#l-err').textContent = 'Nutzername: 2–20 Zeichen, nur Buchstaben (ohne Umlaute), Ziffern, . _ -'; return; }
+    if (pw.length < 6) { $('#l-err').textContent = 'Das Passwort braucht mindestens 6 Zeichen.'; return; }
+    const email = `${name.toLowerCase()}@${EMAIL_DOMAIN}`;
+    $('#l-err').textContent = '…';
+    let res;
+    if (register) res = await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } });
+    else res = await sb.auth.signInWithPassword({ email, password: pw });
+    if (res.error) {
+      const m = res.error.message;
+      $('#l-err').textContent = /Invalid login/i.test(m) ? 'Nutzername oder Passwort falsch.'
+        : /already registered/i.test(m) ? 'Diesen Nutzernamen gibt es schon.'
+        : /signups? (not allowed|disabled)/i.test(m) ? 'Registrierung ist deaktiviert.' : m;
+      return;
+    }
+    if (!res.data.session) { $('#l-err').textContent = 'Kein Login möglich. In Supabase "Confirm email" ausschalten.'; return; }
+    enter(res.data.user);
+  };
+  $('#lf').onsubmit = e => { e.preventDefault(); go(false); };
+  $('#l-reg').onclick = () => go(true);
+}
+
+async function enter(user) {
+  S.user = user;
+  S.name = user.user_metadata?.username || (user.email || '').split('@')[0];
+  renderShell();
+  await load();
+  sb.channel('rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, debLoad)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, debLoad)
+    .subscribe();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) load(); });
+}
+
+let lt;
+function debLoad() { clearTimeout(lt); lt = setTimeout(load, 300); }
+
+async function load() {
+  const [a, b] = await Promise.all([
+    sb.from('items').select('*'),
+    sb.from('notes').select('*').order('updated_at', { ascending: false })
+  ]);
+  const err = a.error || b.error;
+  if (err) { toast('Fehler beim Laden: ' + err.message); return; }
+  S.items = a.data; S.notes = b.data;
+  if (S.itemTag && !S.items.some(i => (i.tags || []).includes(S.itemTag))) S.itemTag = null;
+  render();
+}
+
+/* ---------- Grundgerüst ---------- */
+function renderShell() {
+  $('#app').innerHTML = `
+    <header><h1 id="ttl"></h1><button class="userbtn" data-act="user">👤 ${esc(S.name)}</button></header>
+    <main id="main"></main>
+    <button class="fab" data-act="add" aria-label="Neu">＋</button>
+    <nav>
+      <button data-act="tab" data-t="cal"><span>📅</span>Kalender</button>
+      <button data-act="tab" data-t="todo"><span>📋</span>Liste</button>
+      <button data-act="tab" data-t="note"><span>📝</span>Notizen</button>
+    </nav>`;
+}
+
+function render() {
+  const titles = { cal: 'Kalender', todo: 'Alle ToDos', note: 'Notizen' };
+  $('#ttl').textContent = titles[S.tab];
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === S.tab));
+  const main = $('#main');
+  main.innerHTML = S.tab === 'cal' ? calView() : S.tab === 'todo' ? todoView() : noteView();
+  if (S.tab === 'note') hydrate();
+}
+
+/* ---------- Termine / Datum-Logik ---------- */
+function nextOcc(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  let c = new Date(t.getFullYear(), m - 1, d);
+  if (c < t) c = new Date(t.getFullYear() + 1, m - 1, d);
+  return ymd(c);
+}
+const effDate = i => !i.date ? null : (i.category === 'Geburtstag' ? nextOcc(i.date) : i.date);
+const tagOk = i => !S.itemTag || (i.tags || []).includes(S.itemTag);
+function itemTagChips() {
+  const tags = [...new Set(S.items.flatMap(i => i.tags || []))].sort((a, b) => a.localeCompare(b, 'de'));
+  if (!tags.length) return '';
+  return `<div class="chips">${tags.map(t => `<button class="chip ${S.itemTag === t ? 'on' : ''}" data-act="itag" data-t="${esc(t)}">#${esc(t)}</button>`).join('')}</div>`;
+}
+function eventsOn(key) {
+  return S.items.filter(i => tagOk(i) && i.date && (i.category === 'Geburtstag' ? i.date.slice(5) === key.slice(5) : i.date === key))
+    .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+}
+function ageText(i, onKey) {
+  const by = parseInt(i.date.slice(0, 4), 10);
+  const ey = parseInt((onKey || effDate(i)).slice(0, 4), 10);
+  return by >= 1900 && ey > by ? `wird ${ey - by}` : '';
+}
+
+/* ---------- Zeilen ---------- */
+function itemRow(i, onKey) {
+  const bday = i.category === 'Geburtstag';
+  const subs = i.subtasks || [];
+  const nDone = subs.filter(s => s.done).length;
+  const meta = [];
+  if (onKey === undefined) {
+    const e = effDate(i);
+    if (e) meta.push(fmtD(e));
+  }
+  if (i.time) meta.push(i.time.slice(0, 5) + ' Uhr');
+  if (bday) { const a = ageText(i, onKey); if (a) meta.push(a); }
+  meta.push(i.category);
+  if (subs.length) meta.push(`${nDone}/${subs.length}`);
+  const subHtml = subs.length && !i.done ? subs.map((s, k) =>
+    `<label class="sub ${s.done ? 'd' : ''}"><input type="checkbox" data-act="sub" data-id="${i.id}" data-i="${k}" ${s.done ? 'checked' : ''}><span>${esc(s.text)}</span></label>`).join('') : '';
+  return `<div class="row ${i.done ? 'done' : ''}" style="--cc:var(--c-${i.category})">
+    ${bday ? `<div class="rico">🎂</div>` : `<button class="chk" data-act="toggle" data-id="${i.id}" aria-label="Erledigt">✓</button>`}
+    <div class="rb"><div data-act="edit" data-id="${i.id}"><div class="rt">${esc(i.title)}</div><div class="rm">${esc(meta.join(' · '))}</div>${(i.tags || []).length ? `<div>${i.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}</div>${subHtml}</div>
+  </div>`;
+}
+
+/* ---------- Kalender ---------- */
+function calView() {
+  const m = S.month, y = m.getFullYear(), mo = m.getMonth();
+  const off = (new Date(y, mo, 1).getDay() + 6) % 7;
+  const today = ymd(new Date());
+  let cells = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(d => `<div class="dow">${d}</div>`).join('');
+  for (let k = 0; k < 42; k++) {
+    const d = new Date(y, mo, 1 - off + k), key = ymd(d);
+    const cats = [...new Set(eventsOn(key).map(e => e.category))].slice(0, 4);
+    cells += `<button class="cell ${d.getMonth() !== mo ? 'other' : ''} ${key === today ? 'today' : ''} ${key === S.day ? 'sel' : ''}" data-act="day" data-d="${key}">
+      ${d.getDate()}<div class="dots">${cats.map(c => `<i class="dot" style="background:var(--c-${c})"></i>`).join('')}</div></button>`;
+  }
+  const evs = eventsOn(S.day);
+  const dayName = parseD(S.day).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return `<div class="calhead">
+      <button data-act="prev">‹</button>
+      <h2>${m.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</h2>
+      <div style="display:flex;gap:6px"><button data-act="today">Heute</button><button data-act="next">›</button></div>
+    </div>
+    ${itemTagChips()}
+    <div class="grid">${cells}</div>
+    <div class="daytitle">${dayName}</div>
+    ${evs.length ? evs.map(e => itemRow(e, S.day)).join('') : '<div class="empty">Keine Einträge an diesem Tag.<br>Mit ＋ einen anlegen.</div>'}`;
+}
+
+/* ---------- Liste aller ToDos ---------- */
+function todoView() {
+  const cats = ['Alle', ...CATS].map(c => `<button class="chip ${S.cat === c ? 'on' : ''}" data-act="cat" data-c="${c}">${c === 'Alle' ? 'Alle' : ICON[c] + ' ' + c}</button>`).join('');
+  const stat = [['open', 'Offen'], ['all', 'Alle'], ['done', 'Erledigt']].map(([k, l]) => `<button class="${S.status === k ? 'on' : ''}" data-act="status" data-s="${k}">${l}</button>`).join('');
+  return `<input id="iq" placeholder="🔍 ToDos durchsuchen" value="${esc(S.iq)}" style="margin-bottom:10px">
+    <div class="seg">${stat}</div>
+    <div class="chips">${cats}</div>
+    ${itemTagChips()}
+    <div id="todolist">${todoList()}</div>`;
+}
+function todoList() {
+  const today = ymd(new Date());
+  const q = S.iq.trim().toLowerCase();
+  const list = S.items.filter(i => (S.cat === 'Alle' || i.category === S.cat) && tagOk(i) &&
+    (!q || [i.title, i.body, ...(i.tags || []), ...(i.subtasks || []).map(s => s.text)].join(' ').toLowerCase().includes(q)));
+  const isDone = i => i.done && i.category !== 'Geburtstag';
+  const open = list.filter(i => !isDone(i));
+  const done = list.filter(isDone);
+  const sortF = (a, b) => (effDate(a) || '9999').localeCompare(effDate(b) || '9999') || (a.time || '').localeCompare(b.time || '');
+  const overdue = open.filter(i => i.date && effDate(i) < today).sort(sortF);
+  const tod = open.filter(i => i.date && effDate(i) === today).sort(sortF);
+  const upc = open.filter(i => i.date && effDate(i) > today).sort(sortF);
+  const nod = open.filter(i => !i.date).sort((a, b) => a.title.localeCompare(b.title));
+  const sec = (t, arr, cls = '') => arr.length ? `<div class="sec ${cls}">${t} (${arr.length})</div>${arr.map(i => itemRow(i)).join('')}` : '';
+  const body = (S.status !== 'done' ? sec('Überfällig', overdue, 'red') + sec('Heute', tod) + sec('Demnächst', upc) + sec('Ohne Datum', nod) : '')
+    + (S.status !== 'open' ? sec('Erledigt', done.sort(sortF).reverse()) : '');
+  return body || '<div class="empty">Keine ToDos gefunden.</div>';
+}
+
+/* ---------- Notizen ---------- */
+function noteView() {
+  const tags = [...new Set(S.notes.flatMap(n => n.tags || []))].sort();
+  return `<input id="q" placeholder="🔍 Notizen durchsuchen" value="${esc(S.q)}" style="margin-bottom:10px">
+    ${tags.length ? `<div class="chips">${tags.map(t => `<button class="chip ${S.tag === t ? 'on' : ''}" data-act="tag" data-t="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
+    <div id="notelist">${noteList()}</div>`;
+}
+function noteList() {
+  const q = S.q.trim().toLowerCase();
+  const arr = S.notes.filter(n => (!S.tag || (n.tags || []).includes(S.tag)) &&
+    (!q || (n.title + ' ' + n.body + ' ' + (n.tags || []).join(' ')).toLowerCase().includes(q)));
+  if (!arr.length) return '<div class="empty">Keine Notizen gefunden.</div>';
+  return arr.map(n => {
+    const img = (n.images || [])[0];
+    return `<div class="card note" data-act="editnote" data-id="${n.id}">
+      <div class="nb"><div class="nt">${esc(n.title)}</div>
+        ${n.body ? `<div class="ns">${esc(n.body)}</div>` : ''}
+        <div>${(n.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>
+        <div class="rm" style="margin-top:6px">${esc(n.updated_by || '')} · ${fmtTS(n.updated_at)}${(n.images || []).length ? ' · 🖼 ' + n.images.length : ''}${(n.links || []).length ? ' · 🔗 ' + n.links.length : ''}</div></div>
+      ${img ? `<img class="th" data-path="${esc(img)}" alt="">` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ---------- Bilder ---------- */
+async function signed(paths) {
+  const missing = paths.filter(p => !URLS[p]);
+  if (missing.length) {
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(missing, 3600);
+    if (error) { toast('Bilder: ' + error.message); return; }
+    data.forEach(x => { if (x.signedUrl) URLS[x.path] = x.signedUrl; });
+  }
+}
+async function hydrate(root = document) {
+  const imgs = [...root.querySelectorAll('img[data-path]')];
+  await signed([...new Set(imgs.map(i => i.dataset.path))]);
+  imgs.forEach(i => { if (URLS[i.dataset.path]) i.src = URLS[i.dataset.path]; });
+}
+async function compress(file) {
+  const bmp = await createImageBitmap(file);
+  const sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+}
+
+/* ---------- Globale Klicks ---------- */
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.closest('#modal')) return;
+  const a = el.dataset.act, id = el.dataset.id;
+  if (a === 'tab') { S.tab = el.dataset.t; render(); $('#main').scrollTop = 0; }
+  else if (a === 'prev') { S.month = new Date(S.month.getFullYear(), S.month.getMonth() - 1, 1); render(); }
+  else if (a === 'next') { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 1); render(); }
+  else if (a === 'today') { const n = new Date(); S.month = new Date(n.getFullYear(), n.getMonth(), 1); S.day = ymd(n); render(); }
+  else if (a === 'day') { S.day = el.dataset.d; const d = parseD(S.day); S.month = new Date(d.getFullYear(), d.getMonth(), 1); render(); }
+  else if (a === 'cat') { S.cat = el.dataset.c; render(); }
+  else if (a === 'status') { S.status = el.dataset.s; render(); }
+  else if (a === 'itag') { S.itemTag = S.itemTag === el.dataset.t ? null : el.dataset.t; render(); }
+  else if (a === 'tag') { S.tag = S.tag === el.dataset.t ? null : el.dataset.t; render(); }
+  else if (a === 'edit') openTodo(id);
+  else if (a === 'editnote') openNote(id);
+  else if (a === 'add') { if (S.tab === 'note') openNote(null); else openTodo(null, S.tab === 'cal' ? S.day : null); }
+  else if (a === 'user') openUser();
+  else if (a === 'toggle') {
+    const it = S.items.find(x => x.id === id); if (!it) return;
+    it.done = !it.done; render();
+    const { error } = await sb.from('items').update({ done: it.done, updated_by: S.name, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) { toast(error.message); load(); }
+  }
+  else if (a === 'sub') {
+    const it = S.items.find(x => x.id === id); if (!it) return;
+    it.subtasks[+el.dataset.i].done = el.checked; render();
+    const { error } = await sb.from('items').update({ subtasks: it.subtasks, updated_by: S.name, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) { toast(error.message); load(); }
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'iq') { S.iq = e.target.value; $('#todolist').innerHTML = todoList(); }
+  if (e.target.id === 'q') { S.q = e.target.value; $('#notelist').innerHTML = noteList(); hydrate($('#notelist')); }
+});
+
+/* ---------- Modal-Grundlage ---------- */
+function showModal(title, bodyHtml) {
+  $('#modal').innerHTML = `<div class="ov"><div class="sheet">
+    <div class="sh"><button class="x" data-m="close" aria-label="Schließen">✕</button><h2>${esc(title)}</h2><button class="pri" data-m="save">Speichern</button></div>
+    <div class="sb">${bodyHtml}</div></div></div>`;
+  return $('#modal .sheet');
+}
+const closeModal = () => { $('#modal').innerHTML = ''; };
+
+function openUser() {
+  const tok = (() => { try { return localStorage.getItem('notizen_cal_token') || ''; } catch (e) { return ''; } })();
+  const sh = showModal('Konto', `
+    <div>Angemeldet als <b>${esc(S.name)}</b></div>
+    <div class="card" style="margin:0">
+      <h4>🔔 Erinnerungen</h4>
+      <p class="hint" style="margin:6px 0 0">Kommen als Push über die App <b>ntfy</b> auf beide Handys: morgens die Tagesübersicht, Termine 15 Minuten vorher, Geburtstage am Vorabend. Eingerichtet wird das einmalig in Supabase (Anleitung, Schritte 4–6) – in der App ist nichts einzustellen.</p>
+    </div>
+    <div class="card" style="margin:0">
+      <h4>📆 Kalender abonnieren</h4>
+      <p class="hint" style="margin:6px 0 10px">Zusätzlich lassen sich alle Einträge als Kalender abonnieren (Google oder Apple Kalender). Trage den geheimen Token ein, den du in Supabase als <b>CALENDAR_TOKEN</b> gesetzt hast. Er wird nur auf diesem Gerät gespeichert.</p>
+      <input id="u-token" value="${esc(tok)}" placeholder="Geheimer Token" autocapitalize="off" autocomplete="off">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn2" data-m="copyfeed">🔗 Abo-Link kopieren</button>
+        <button class="btn2" data-m="openfeed">📱 In Kalender-App öffnen</button>
+      </div>
+      <p class="hint" style="margin:10px 0 0">Google Kalender nimmt Abo-Links nur am PC an: calendar.google.com → „Weitere Kalender" → „Per URL" → Link einfügen. Danach erscheint der Kalender auch auf dem Handy. Apple Kalender: „In Kalender-App öffnen".</p>
+    </div>
+    <button class="danger" data-m="logout">Abmelden</button>
+    ${usePlaceholder ? `<button class="btn2" data-m="resetcfg">Supabase-Verbindung zurücksetzen</button>` : ''}`);
+  sh.querySelector('[data-m=save]').style.display = 'none';
+  const feedUrl = () => {
+    const t = $('#u-token', sh).value.trim();
+    if (!t) { toast('Bitte zuerst den Token eintragen.'); return null; }
+    try { localStorage.setItem('notizen_cal_token', t); } catch (e) {}
+    return `${(cfgUrl || '').replace(/\/$/, '')}/functions/v1/calendar?token=${encodeURIComponent(t)}`;
+  };
+  sh.addEventListener('click', async e => {
+    const m = e.target.closest('[data-m]')?.dataset.m;
+    if (m === 'close') closeModal();
+    if (m === 'logout') { await sb.auth.signOut(); location.reload(); }
+    if (m === 'resetcfg') { localStorage.removeItem(CFG_KEY); await sb.auth.signOut(); location.reload(); }
+    if (m === 'copyfeed' || m === 'openfeed') {
+      if (sb.__demo) { toast('In der Demo nicht verfügbar – es gibt hier keine Verbindung zu Supabase.'); return; }
+      const u = feedUrl(); if (!u) return;
+      if (m === 'openfeed') { location.href = u.replace(/^https:/, 'webcal:'); return; }
+      try { await navigator.clipboard.writeText(u); toast('Abo-Link kopiert.'); } catch (err) { prompt('Abo-Link zum Kopieren:', u); }
+    }
+  });
+}
+
+/* ---------- Editor: Aufgabe / Termin ---------- */
+function openTodo(id, presetDate) {
+  const src = id ? S.items.find(x => x.id === id) : null;
+  const d = src ? structuredClone(src) : { title: '', category: 'Aufgabe', body: '', subtasks: [], links: [], tags: [], date: presetDate || null, time: null, done: false };
+  const catsHtml = () => CATS.map(c => `<button type="button" class="chip ${d.category === c ? 'on' : ''}" data-m="cat" data-c="${c}">${ICON[c]} ${c}</button>`).join('');
+  const allTags = [...new Set(S.items.flatMap(i => i.tags || []))].sort((a, b) => a.localeCompare(b, 'de'));
+  const sug = () => allTags.map(t => `<button type="button" class="chip" data-m="tagsug" data-t="${esc(t)}">#${esc(t)}</button>`).join('');
+  const subsHtml = () => d.subtasks.map((s, i) => `<div class="sr"><input type="checkbox" data-sti="${i}" data-k="done" ${s.done ? 'checked' : ''}><input data-sti="${i}" data-k="text" value="${esc(s.text)}"><button type="button" data-m="delsub" data-i="${i}">✕</button></div>`).join('');
+  const linksHtml = () => d.links.map((u, i) => `<div class="lr"><a href="${esc(safeHref(u))}" target="_blank" rel="noopener">${esc(u)}</a><button type="button" data-m="dellink" data-i="${i}">✕</button></div>`).join('');
+  const sh = showModal(src ? 'Bearbeiten' : 'Neuer Eintrag', `
+    <label class="l">Titel<input id="f-title" value="${esc(d.title)}" placeholder="Was steht an?"></label>
+    <div><div class="chips" id="f-cats">${catsHtml()}</div><div class="hint" id="f-hint"></div></div>
+    <div class="two"><label class="l">Datum<input type="date" id="f-date" value="${d.date || ''}"></label>
+      <label class="l">Uhrzeit<input type="time" id="f-time" value="${(d.time || '').slice(0, 5)}"></label></div>
+    <div><label class="l">Tags (durch Komma getrennt)<input id="f-tags" value="${esc((d.tags || []).join(', '))}" placeholder="z. B. Haus, Familie" autocapitalize="off"></label>
+      ${allTags.length ? `<div class="chips" style="margin:8px 0 0">${sug()}</div>` : ''}</div>
+    <label class="l">Freitext<textarea id="f-body">${esc(d.body)}</textarea></label>
+    <div><h4>Unteraufgaben</h4><div id="f-subs" style="margin-top:8px">${subsHtml()}</div>
+      <div class="add"><input id="f-subnew" placeholder="Neue Unteraufgabe"><button type="button" data-m="addsub">+</button></div></div>
+    <div><h4>Links</h4><div id="f-links" style="margin-top:8px">${linksHtml()}</div>
+      <div class="add"><input id="f-linknew" type="url" placeholder="https://…" autocapitalize="off"><button type="button" data-m="addlink">+</button></div></div>
+    <label class="inl"><input type="checkbox" id="f-done" ${d.done ? 'checked' : ''}> Erledigt</label>
+    ${src ? `<div class="hint">Erstellt von ${esc(src.created_by || '?')} · zuletzt geändert von ${esc(src.updated_by || '?')}, ${fmtTS(src.updated_at)}</div>
+      <button class="danger" data-m="del">Löschen</button>` : ''}`);
+  const hint = () => { $('#f-hint', sh).textContent = d.category === 'Geburtstag' ? 'Wiederholt sich jedes Jahr im Kalender.' : ''; };
+  hint();
+  const addSub = () => { const v = $('#f-subnew', sh).value.trim(); if (!v) return; d.subtasks.push({ text: v, done: false }); $('#f-subnew', sh).value = ''; $('#f-subs', sh).innerHTML = subsHtml(); };
+  const addLink = () => { const v = normLink($('#f-linknew', sh).value); if (!v) return; d.links.push(v); $('#f-linknew', sh).value = ''; $('#f-links', sh).innerHTML = linksHtml(); };
+  sh.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (e.target.id === 'f-subnew') { e.preventDefault(); addSub(); }
+    if (e.target.id === 'f-linknew') { e.preventDefault(); addLink(); }
+  });
+  sh.addEventListener('input', e => {
+    const t = e.target;
+    if (t.dataset.sti !== undefined) d.subtasks[+t.dataset.sti][t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value;
+  });
+  sh.addEventListener('click', async e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    const m = b.dataset.m, i = +b.dataset.i;
+    if (m === 'close') closeModal();
+    else if (m === 'cat') { d.category = b.dataset.c; $('#f-cats', sh).innerHTML = catsHtml(); hint(); }
+    else if (m === 'tagsug') {
+      const inp = $('#f-tags', sh), t = b.dataset.t;
+      const cur = inp.value.split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean);
+      inp.value = (cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]).join(', ');
+    }
+    else if (m === 'addsub') addSub();
+    else if (m === 'delsub') { d.subtasks.splice(i, 1); $('#f-subs', sh).innerHTML = subsHtml(); }
+    else if (m === 'addlink') addLink();
+    else if (m === 'dellink') { d.links.splice(i, 1); $('#f-links', sh).innerHTML = linksHtml(); }
+    else if (m === 'del') {
+      if (!confirm('Diesen Eintrag wirklich löschen?')) return;
+      const { error } = await sb.from('items').delete().eq('id', id);
+      if (error) return toast(error.message);
+      closeModal(); load();
+    }
+    else if (m === 'save') {
+      const title = $('#f-title', sh).value.trim();
+      if (!title) { toast('Bitte einen Titel eingeben.'); return; }
+      addSub(); addLink();
+      const row = {
+        title, category: d.category, body: $('#f-body', sh).value,
+        tags: [...new Set($('#f-tags', sh).value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))],
+        subtasks: d.subtasks.filter(s => s.text.trim()), links: d.links,
+        date: $('#f-date', sh).value || null, time: $('#f-time', sh).value || null,
+        done: $('#f-done', sh).checked, updated_by: S.name, updated_at: new Date().toISOString()
+      };
+      b.disabled = true;
+      const res = src ? await sb.from('items').update(row).eq('id', id)
+                      : await sb.from('items').insert({ ...row, created_by: S.name });
+      b.disabled = false;
+      if (res.error) return toast(res.error.message);
+      if (row.date) { const dd = parseD(row.date); S.day = row.date; S.month = new Date(dd.getFullYear(), dd.getMonth(), 1); }
+      closeModal(); load();
+    }
+  });
+}
+
+/* ---------- Editor: Notiz ---------- */
+function openNote(id) {
+  const src = id ? S.notes.find(x => x.id === id) : null;
+  const d = src ? structuredClone(src) : { title: '', body: '', images: [], links: [], tags: [] };
+  const added = [], removed = [];
+  const imgsHtml = () => d.images.map((p, i) => `<div class="im"><img data-path="${esc(p)}" data-m="zoom" alt=""><button type="button" data-m="delimg" data-i="${i}">✕</button></div>`).join('');
+  const linksHtml = () => d.links.map((u, i) => `<div class="lr"><a href="${esc(safeHref(u))}" target="_blank" rel="noopener">${esc(u)}</a><button type="button" data-m="dellink" data-i="${i}">✕</button></div>`).join('');
+  const sh = showModal(src ? 'Notiz bearbeiten' : 'Neue Notiz', `
+    <label class="l">Titel<input id="f-title" value="${esc(d.title)}" placeholder="Titel"></label>
+    <label class="l">Freitext<textarea id="f-body" style="min-height:160px">${esc(d.body)}</textarea></label>
+    <label class="l">Tags (durch Komma getrennt)<input id="f-tags" value="${esc((d.tags || []).join(', '))}" placeholder="z. B. Haus, Ideen" autocapitalize="off"></label>
+    <div><h4>Bilder</h4><div class="imgs" id="f-imgs" style="margin-top:8px">${imgsHtml()}</div>
+      <label class="btn2">📷 Bild hinzufügen<input type="file" id="f-file" accept="image/*" multiple hidden></label></div>
+    <div><h4>Links</h4><div id="f-links" style="margin-top:8px">${linksHtml()}</div>
+      <div class="add"><input id="f-linknew" type="url" placeholder="https://…" autocapitalize="off"><button type="button" data-m="addlink">+</button></div></div>
+    ${src ? `<div class="hint">Erstellt von ${esc(src.created_by || '?')} · zuletzt geändert von ${esc(src.updated_by || '?')}, ${fmtTS(src.updated_at)}</div>
+      <button class="danger" data-m="del">Löschen</button>` : ''}`);
+  hydrate(sh);
+  const addLink = () => { const v = normLink($('#f-linknew', sh).value); if (!v) return; d.links.push(v); $('#f-linknew', sh).value = ''; $('#f-links', sh).innerHTML = linksHtml(); };
+  const cancel = async () => { if (added.length) await sb.storage.from(BUCKET).remove(added); closeModal(); };
+  sh.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'f-linknew') { e.preventDefault(); addLink(); } });
+  $('#f-file', sh).addEventListener('change', async e => {
+    const files = [...e.target.files]; e.target.value = '';
+    for (const f of files) {
+      try {
+        toast('Bild wird hochgeladen …');
+        const blob = await compress(f);
+        const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
+        if (error) throw error;
+        added.push(path); d.images.push(path);
+        $('#f-imgs', sh).innerHTML = imgsHtml(); hydrate(sh);
+        $('#toast').style.display = 'none';
+      } catch (err) { toast('Bild konnte nicht hochgeladen werden: ' + (err.message || err)); }
+    }
+  });
+  sh.addEventListener('click', async e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    const m = b.dataset.m, i = +b.dataset.i;
+    if (m === 'close') cancel();
+    else if (m === 'addlink') addLink();
+    else if (m === 'dellink') { d.links.splice(i, 1); $('#f-links', sh).innerHTML = linksHtml(); }
+    else if (m === 'delimg') { removed.push(d.images[i]); d.images.splice(i, 1); $('#f-imgs', sh).innerHTML = imgsHtml(); hydrate(sh); }
+    else if (m === 'zoom') {
+      const url = URLS[b.dataset.path]; if (!url) return;
+      const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${esc(url)}" alt="">`;
+      lb.onclick = () => lb.remove(); document.body.appendChild(lb);
+    }
+    else if (m === 'del') {
+      if (!confirm('Diese Notiz wirklich löschen?')) return;
+      const { error } = await sb.from('notes').delete().eq('id', id);
+      if (error) return toast(error.message);
+      if (src.images?.length) await sb.storage.from(BUCKET).remove(src.images);
+      closeModal(); load();
+    }
+    else if (m === 'save') {
+      const title = $('#f-title', sh).value.trim();
+      if (!title) { toast('Bitte einen Titel eingeben.'); return; }
+      addLink();
+      const tags = [...new Set($('#f-tags', sh).value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
+      const row = { title, body: $('#f-body', sh).value, images: d.images, links: d.links, tags, updated_by: S.name, updated_at: new Date().toISOString() };
+      b.disabled = true;
+      const res = src ? await sb.from('notes').update(row).eq('id', id)
+                      : await sb.from('notes').insert({ ...row, created_by: S.name });
+      b.disabled = false;
+      if (res.error) return toast(res.error.message);
+      const gone = removed.filter(p => !d.images.includes(p));
+      if (gone.length) await sb.storage.from(BUCKET).remove(gone);
+      closeModal(); load();
+    }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
