@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2f6fed">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Notizen">
-<title>Notizen &amp; Aufgaben</title>
+<meta name="apple-mobile-web-app-title" content="Kalender">
+<meta name="application-name" content="Kalender">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Kalender</title>
 <style>
 :root{
   --bg:#f4f5f8; --card:#fff; --text:#1b1f2a; --muted:#6b7385; --line:#e3e6ee;
@@ -142,8 +143,8 @@ label.l{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--mu
    Lässt du die Platzhalter stehen, fragt die App beim ersten Start danach
    und merkt sich die Eingabe nur auf diesem Handy.
    =================================================================== */
-const SUPABASE_URL = 'https://xbmsoyufbuwrunvrotyp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhibXNveXVmYnV3cnVudnJvdHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNTM4MDUsImV4cCI6MjEwODkyOTgwNX0.BaSk0faUg6bd-4jqY18nVfo8esY9i98qIBoHSoNgduA';
+const SUPABASE_URL = 'https://DEIN-PROJEKT.supabase.co';
+const SUPABASE_ANON_KEY = 'DEIN-ANON-KEY';
 const EMAIL_DOMAIN = 'notizen-app.de';   // nur intern: Nutzername -> Pseudo-E-Mail
 const BUCKET = 'note-images';
 
@@ -204,7 +205,7 @@ function renderSetup() {
 
 function renderLogin(msg = '') {
   $('#app').innerHTML = `<form class="login" id="lf">
-    <h1>📝 Notizen &amp; Aufgaben</h1>
+    <h1>📆 Kalender</h1>
     <p class="muted">Melde dich mit deinem Nutzernamen an.</p>
     <input id="l-user" placeholder="Nutzername" autocomplete="username" autocapitalize="off" autocorrect="off">
     <input id="l-pw" type="password" placeholder="Passwort (mind. 6 Zeichen)" autocomplete="current-password">
@@ -481,18 +482,13 @@ function openUser() {
   const sh = showModal('Konto', `
     <div>Angemeldet als <b>${esc(S.name)}</b></div>
     <div class="card" style="margin:0">
-      <h4>🔔 Erinnerungen</h4>
-      <p class="hint" style="margin:6px 0 0">Kommen als Push über die App <b>ntfy</b> auf beide Handys: morgens die Tagesübersicht, Termine 15 Minuten vorher, Geburtstage am Vorabend. Eingerichtet wird das einmalig in Supabase (Anleitung, Schritte 4–6) – in der App ist nichts einzustellen.</p>
-    </div>
-    <div class="card" style="margin:0">
       <h4>📆 Kalender abonnieren</h4>
-      <p class="hint" style="margin:6px 0 10px">Zusätzlich lassen sich alle Einträge als Kalender abonnieren (Google oder Apple Kalender). Trage den geheimen Token ein, den du in Supabase als <b>CALENDAR_TOKEN</b> gesetzt hast. Er wird nur auf diesem Gerät gespeichert.</p>
+      <p class="hint" style="margin:6px 0 10px">Erinnerungen kommen über deinen Handy-Kalender (z. B. Google Kalender oder Apple Kalender). Trage den geheimen Token ein, den du in Supabase als <b>CALENDAR_TOKEN</b> gesetzt hast. Er wird nur auf diesem Gerät gespeichert.</p>
       <input id="u-token" value="${esc(tok)}" placeholder="Geheimer Token" autocapitalize="off" autocomplete="off">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="btn2" data-m="copyfeed">🔗 Abo-Link kopieren</button>
         <button class="btn2" data-m="openfeed">📱 In Kalender-App öffnen</button>
       </div>
-      <p class="hint" style="margin:10px 0 0">Google Kalender nimmt Abo-Links nur am PC an: calendar.google.com → „Weitere Kalender" → „Per URL" → Link einfügen. Danach erscheint der Kalender auch auf dem Handy. Apple Kalender: „In Kalender-App öffnen".</p>
     </div>
     <button class="danger" data-m="logout">Abmelden</button>
     ${usePlaceholder ? `<button class="btn2" data-m="resetcfg">Supabase-Verbindung zurücksetzen</button>` : ''}`);
