@@ -78,6 +78,9 @@ nav button.on{color:var(--pri);font-weight:600}
 .cell.hol{color:var(--danger);border-color:var(--danger)}
 .row.hol{--cc:var(--danger)}
 .row.hol .rt{color:var(--danger)}
+.sechead{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 8px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;font-weight:700;text-align:left}
+.sechead .cnt{font-weight:600;font-size:14px;color:var(--muted);background:var(--bg);border-radius:999px;padding:1px 10px}
+div.sechead{cursor:default}
 /* Kalender */
 .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .calhead h2{font-size:18px;text-transform:capitalize}
@@ -220,7 +223,7 @@ let sb = null;
 const S = {
   user: null, name: '', tab: 'cal', items: [], notes: [],
   month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  day: ymd(new Date()), cat: 'Alle', status: 'open', iq: '', itemTag: null, who: [], people: [1, 2, 3, 4].map(id => ({ id, name: 'Person ' + id })), q: '', tag: null
+  day: ymd(new Date()), cat: 'Alle', status: 'open', iq: '', itemTag: null, sec: {}, who: [], people: [1, 2, 3, 4].map(id => ({ id, name: 'Person ' + id })), q: '', tag: null
 };
 const URLS = {};
 
@@ -448,30 +451,48 @@ function calView() {
 /* ---------- Liste aller ToDos ---------- */
 function todoView() {
   const cats = ['Alle', ...CATS].map(c => `<button class="chip ${S.cat === c ? 'on' : ''}" data-act="cat" data-c="${c}">${c === 'Alle' ? 'Alle' : ICON[c] + ' ' + c}</button>`).join('');
-  const stat = [['open', 'Offen'], ['all', 'Alle'], ['done', 'Erledigt']].map(([k, l]) => `<button class="${S.status === k ? 'on' : ''}" data-act="status" data-s="${k}">${l}</button>`).join('');
   return `${peopleBar()}<input id="iq" placeholder="🔍 ToDos durchsuchen" value="${esc(S.iq)}" style="margin-bottom:10px">
-    <div class="seg">${stat}</div>
     <div class="chips">${cats}</div>
     ${itemTagChips()}
     <div id="todolist">${todoList()}</div>`;
+}
+/* Geburtstage und Erledigt sind standardmäßig eingeklappt; bei Suche oder Kategorie "Geburtstag" automatisch offen */
+const secOpen = k => S.iq.trim() !== '' || (k === 'bday' && S.cat === 'Geburtstag') || S.sec[k] === true;
+function secHead(k, label, n) {
+  const o = secOpen(k);
+  return `<button class="sechead" data-act="sec" data-k="${k}" aria-expanded="${o}"><span>${o ? '▾' : '▸'} ${label}</span><span class="cnt">${n}</span></button>`;
 }
 function todoList() {
   const today = ymd(new Date());
   const q = S.iq.trim().toLowerCase();
   const list = S.items.filter(i => (S.cat === 'Alle' || i.category === S.cat) && itemOk(i) &&
     (!q || [i.title, i.body, ...(i.tags || []), ...(i.subtasks || []).map(s => s.text)].join(' ').toLowerCase().includes(q)));
-  const isDone = i => i.done && i.category !== 'Geburtstag';
-  const open = list.filter(i => !isDone(i));
-  const done = list.filter(isDone);
+  if (!list.length) return '<div class="empty">Keine ToDos gefunden.</div>';
+  const bday = list.filter(i => i.category === 'Geburtstag');
+  const rest = list.filter(i => i.category !== 'Geburtstag');
+  const open = rest.filter(i => !i.done);
+  const done = rest.filter(i => i.done);
   const sortF = (a, b) => (effDate(a) || '9999').localeCompare(effDate(b) || '9999') || (a.time || '').localeCompare(b.time || '');
   const overdue = open.filter(i => i.date && effDate(i) < today).sort(sortF);
   const tod = open.filter(i => i.date && effDate(i) === today).sort(sortF);
   const upc = open.filter(i => i.date && effDate(i) > today).sort(sortF);
-  const nod = open.filter(i => !i.date).sort((a, b) => a.title.localeCompare(b.title));
-  const sec = (t, arr, cls = '') => arr.length ? `<div class="sec ${cls}">${t} (${arr.length})</div>${arr.map(i => itemRow(i)).join('')}` : '';
-  const body = (S.status !== 'done' ? sec('Überfällig', overdue, 'red') + sec('Heute', tod) + sec('Demnächst', upc) + sec('Ohne Datum', nod) : '')
-    + (S.status !== 'open' ? sec('Erledigt', done.sort(sortF).reverse()) : '');
-  return body || '<div class="empty">Keine ToDos gefunden.</div>';
+  const nod = open.filter(i => !i.date).sort((a, b) => a.title.localeCompare(b.title, 'de'));
+  const sub = (t, arr, cls = '') => arr.length ? `<div class="sec ${cls}">${t}</div>${arr.map(i => itemRow(i)).join('')}` : '';
+  let html = '';
+  if (S.cat !== 'Geburtstag') {
+    html += `<div class="sechead"><span>Offen</span><span class="cnt">${open.length}</span></div>`;
+    html += open.length ? sub('Überfällig', overdue, 'red') + sub('Heute', tod) + sub('Demnächst', upc) + sub('Ohne Datum', nod)
+                        : `<div class="empty" style="padding:14px">${q ? 'Keine offenen Treffer.' : 'Nichts offen. 🎉'}</div>`;
+  }
+  if (bday.length) {
+    html += secHead('bday', '🎂 Geburtstage', bday.length);
+    if (secOpen('bday')) html += bday.sort(sortF).map(i => itemRow(i)).join('');
+  }
+  if (done.length) {
+    html += secHead('done', '✅ Erledigt', done.length);
+    if (secOpen('done')) html += done.sort(sortF).reverse().map(i => itemRow(i)).join('');
+  }
+  return html;
 }
 
 /* ---------- Notizen ---------- */
@@ -534,6 +555,7 @@ document.addEventListener('click', async e => {
   else if (a === 'cat') { S.cat = el.dataset.c; render(); }
   else if (a === 'who') { const pid = +el.dataset.p; S.who = S.who.includes(pid) ? S.who.filter(x => x !== pid) : [...S.who, pid]; render(); }
   else if (a === 'whoreset') { S.who = []; render(); }
+  else if (a === 'sec') { const k = el.dataset.k; S.sec[k] = !secOpen(k); render(); }
   else if (a === 'status') { S.status = el.dataset.s; render(); }
   else if (a === 'itag') { S.itemTag = S.itemTag === el.dataset.t ? null : el.dataset.t; render(); }
   else if (a === 'tag') { S.tag = S.tag === el.dataset.t ? null : el.dataset.t; render(); }
