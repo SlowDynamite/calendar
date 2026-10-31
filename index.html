@@ -56,6 +56,28 @@ nav button.on{color:var(--pri);font-weight:600}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px;background:var(--card)}
 .seg button{flex:1;padding:8px;font-size:14px;color:var(--muted)}
 .seg button.on{background:var(--pri);color:var(--pri-t);font-weight:600}
+.pbar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.pbtn{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 4px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:14px;min-width:0}
+.pbtn i{flex:none;width:9px;height:9px;border-radius:50%;background:var(--wc)}
+.pbtn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbtn.on{background:var(--wc);border-color:var(--wc);color:#fff;font-weight:600}
+.pbtn.on i{background:#fff}
+.who{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 8px 2px 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);margin:4px 4px 0 0;color:var(--text)}
+.who i{width:8px;height:8px;border-radius:50%;background:var(--wc)}
+.chip.pc{display:inline-flex;align-items:center;gap:6px}
+.chip.pc i{width:9px;height:9px;border-radius:50%;background:var(--wc)}
+.chip.pc.on{background:var(--wc);border-color:var(--wc);color:#fff}
+.chip.pc.on i{background:#fff}
+.dotc{flex:none;width:14px;height:14px;border-radius:50%}
+.lnk{color:var(--pri);text-decoration:underline;font-size:13px}
+.sws{display:grid;grid-template-columns:repeat(5,max-content);gap:10px 16px;margin-top:8px}
+.sw{width:36px;height:36px;border-radius:50%;border:2px solid transparent;padding:3px;background:none;display:flex}
+.sw i{flex:1;border-radius:50%}
+.sw.std{border:2px dashed var(--muted)}
+.sw.on{border:2px solid var(--text)}
+.cell.hol{color:var(--danger);border-color:var(--danger)}
+.row.hol{--cc:var(--danger)}
+.row.hol .rt{color:var(--danger)}
 /* Kalender */
 .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .calhead h2{font-size:18px;text-transform:capitalize}
@@ -198,7 +220,7 @@ let sb = null;
 const S = {
   user: null, name: '', tab: 'cal', items: [], notes: [],
   month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  day: ymd(new Date()), cat: 'Alle', status: 'open', iq: '', itemTag: null, q: '', tag: null
+  day: ymd(new Date()), cat: 'Alle', status: 'open', iq: '', itemTag: null, who: [], people: [1, 2, 3, 4].map(id => ({ id, name: 'Person ' + id })), q: '', tag: null
 };
 const URLS = {};
 
@@ -267,6 +289,7 @@ async function enter(user) {
   sb.channel('rt')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, debLoad)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, debLoad)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, debLoad)
     .subscribe();
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) load(); });
 }
@@ -275,13 +298,16 @@ let lt;
 function debLoad() { clearTimeout(lt); lt = setTimeout(load, 300); }
 
 async function load() {
-  const [a, b] = await Promise.all([
+  const [a, b, c] = await Promise.all([
     sb.from('items').select('*'),
-    sb.from('notes').select('*').order('updated_at', { ascending: false })
+    sb.from('notes').select('*').order('updated_at', { ascending: false }),
+    sb.from('people').select('*').order('id')
   ]);
   const err = a.error || b.error;
   if (err) { toast('Fehler beim Laden: ' + err.message); return; }
   S.items = a.data; S.notes = b.data;
+  if (!c.error && c.data && c.data.length) S.people = c.data.slice().sort((x, y) => x.id - y.id);
+  else if (c.error && !load.warned) { load.warned = true; toast('Beteiligte nicht gefunden – bitte supabase_participants.sql in Supabase ausführen.'); }
   if (S.itemTag && !S.items.some(i => (i.tags || []).includes(S.itemTag))) S.itemTag = null;
   render();
 }
@@ -318,13 +344,51 @@ function nextOcc(dateStr) {
 }
 const effDate = i => !i.date ? null : (i.category === 'Geburtstag' ? nextOcc(i.date) : i.date);
 const tagOk = i => !S.itemTag || (i.tags || []).includes(S.itemTag);
+const PCOL = { 1: '#d97706', 2: '#0d9488', 3: '#dc2626', 4: '#4f46e5' };
+/* ---------- Feiertage (Niedersachsen), berechnet ohne Datenquelle ---------- */
+let HOL_ON = true;
+try { HOL_ON = localStorage.getItem('notizen_hol') !== '0'; } catch (e) {}
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a +11 * h + 22 * l) / 451),
+    month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day);
+}
+const HOL_CACHE = {};
+function holidaysOf(y) {
+  if (HOL_CACHE[y]) return HOL_CACHE[y];
+  const m = new Map();
+  const fix = (mo, d, n) => m.set(`${y}-${pad(mo)}-${pad(d)}`, n);
+  fix(1, 1, 'Neujahr'); fix(5, 1, 'Tag der Arbeit'); fix(10, 3, 'Tag der Deutschen Einheit');
+  fix(10, 31, 'Reformationstag'); fix(12, 25, '1. Weihnachtstag'); fix(12, 26, '2. Weihnachtstag');
+  const e = easterSunday(y);
+  const rel = (n, name) => m.set(ymd(new Date(y, e.getMonth(), e.getDate() + n)), name);
+  rel(-2, 'Karfreitag'); rel(1, 'Ostermontag'); rel(39, 'Christi Himmelfahrt'); rel(50, 'Pfingstmontag');
+  return (HOL_CACHE[y] = m);
+}
+const holName = key => HOL_ON ? (holidaysOf(+key.slice(0, 4)).get(key) || '') : '';
+const COLORS = [['#2f6fed', 'Blau'], ['#0d9488', 'Türkis'], ['#1f9d63', 'Grün'], ['#e0a21f', 'Gelb'], ['#e07b1f', 'Orange'], ['#d63a3a', 'Rot'], ['#e0508f', 'Pink'], ['#8a54d6', 'Violett'], ['#6b7385', 'Grau']];
+const itemColor = i => /^#[0-9a-f]{6}$/i.test(i.color || '') ? i.color : `var(--c-${i.category})`;
+const timeLabel = i => i.time ? i.time.slice(0, 5) + (i.end_time && i.end_time > i.time ? '–' + i.end_time.slice(0, 5) : '') + ' Uhr' : '';
+const whoOk = i => !S.who.length || (i.people || []).some(p => S.who.includes(p));
+const itemOk = i => tagOk(i) && whoOk(i);
+const whoChip = id => { const p = S.people.find(x => x.id === id); return p ? `<span class="who" style="--wc:${PCOL[id]}"><i></i>${esc(p.name)}</span>` : ''; };
+const itemChips = i => {
+  const parts = (i.people || []).map(whoChip).join('') + (i.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join('');
+  return parts ? `<div>${parts}</div>` : '';
+};
+function peopleBar() {
+  return `<div class="pbar">${S.people.map(p => `<button class="pbtn ${S.who.includes(p.id) ? 'on' : ''}" style="--wc:${PCOL[p.id]}" data-act="who" data-p="${p.id}"><i></i><span class="nm">${esc(p.name)}</span></button>`).join('')}</div>`
+    + (S.who.length ? `<div class="hint" style="margin:-4px 2px 10px">Gefiltert nach Beteiligten · <button class="lnk" data-act="whoreset">alle anzeigen</button></div>` : '');
+}
 function itemTagChips() {
   const tags = [...new Set(S.items.flatMap(i => i.tags || []))].sort((a, b) => a.localeCompare(b, 'de'));
   if (!tags.length) return '';
   return `<div class="chips">${tags.map(t => `<button class="chip ${S.itemTag === t ? 'on' : ''}" data-act="itag" data-t="${esc(t)}">#${esc(t)}</button>`).join('')}</div>`;
 }
 function eventsOn(key) {
-  return S.items.filter(i => tagOk(i) && i.date && (i.category === 'Geburtstag' ? i.date.slice(5) === key.slice(5) : i.date === key))
+  return S.items.filter(i => itemOk(i) && i.date && (i.category === 'Geburtstag' ? i.date.slice(5) === key.slice(5) : i.date === key))
     .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
 }
 function ageText(i, onKey) {
@@ -343,15 +407,15 @@ function itemRow(i, onKey) {
     const e = effDate(i);
     if (e) meta.push(fmtD(e));
   }
-  if (i.time) meta.push(i.time.slice(0, 5) + ' Uhr');
+  if (i.time) meta.push(timeLabel(i));
   if (bday) { const a = ageText(i, onKey); if (a) meta.push(a); }
   meta.push(i.category);
   if (subs.length) meta.push(`${nDone}/${subs.length}`);
   const subHtml = subs.length && !i.done ? subs.map((s, k) =>
     `<label class="sub ${s.done ? 'd' : ''}"><input type="checkbox" data-act="sub" data-id="${i.id}" data-i="${k}" ${s.done ? 'checked' : ''}><span>${esc(s.text)}</span></label>`).join('') : '';
-  return `<div class="row ${i.done ? 'done' : ''}" style="--cc:var(--c-${i.category})">
+  return `<div class="row ${i.done ? 'done' : ''}" style="--cc:${itemColor(i)}">
     ${bday ? `<div class="rico">🎂</div>` : `<button class="chk" data-act="toggle" data-id="${i.id}" aria-label="Erledigt">✓</button>`}
-    <div class="rb"><div data-act="edit" data-id="${i.id}"><div class="rt">${esc(i.title)}</div><div class="rm">${esc(meta.join(' · '))}</div>${(i.tags || []).length ? `<div>${i.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}</div>${subHtml}</div>
+    <div class="rb"><div data-act="edit" data-id="${i.id}"><div class="rt">${esc(i.title)}</div><div class="rm">${esc(meta.join(' · '))}</div>${itemChips(i)}</div>${subHtml}</div>
   </div>`;
 }
 
@@ -363,13 +427,13 @@ function calView() {
   let cells = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(d => `<div class="dow">${d}</div>`).join('');
   for (let k = 0; k < 42; k++) {
     const d = new Date(y, mo, 1 - off + k), key = ymd(d);
-    const cats = [...new Set(eventsOn(key).map(e => e.category))].slice(0, 4);
-    cells += `<button class="cell ${d.getMonth() !== mo ? 'other' : ''} ${key === today ? 'today' : ''} ${key === S.day ? 'sel' : ''}" data-act="day" data-d="${key}">
-      ${d.getDate()}<div class="dots">${cats.map(c => `<i class="dot" style="background:var(--c-${c})"></i>`).join('')}</div></button>`;
+    const cats = [...new Set(eventsOn(key).map(itemColor))].slice(0, 4);
+    cells += `<button class="cell ${d.getMonth() !== mo ? 'other' : ''} ${key === today ? 'today' : ''} ${key === S.day ? 'sel' : ''} ${holName(key) ? 'hol' : ''}" data-act="day" data-d="${key}">
+      ${d.getDate()}<div class="dots">${cats.map(c => `<i class="dot" style="background:${c}"></i>`).join('')}</div></button>`;
   }
   const evs = eventsOn(S.day);
   const dayName = parseD(S.day).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  return `<div class="calhead">
+  return `${peopleBar()}<div class="calhead">
       <button data-act="prev">‹</button>
       <h2>${m.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</h2>
       <div style="display:flex;gap:6px"><button data-act="today">Heute</button><button data-act="next">›</button></div>
@@ -377,14 +441,15 @@ function calView() {
     ${itemTagChips()}
     <div class="grid">${cells}</div>
     <div class="daytitle">${dayName}</div>
-    ${evs.length ? evs.map(e => itemRow(e, S.day)).join('') : '<div class="empty">Keine Einträge an diesem Tag.<br>Mit ＋ einen anlegen.</div>'}`;
+    ${holName(S.day) ? `<div class="row hol"><div class="rico">🎉</div><div class="rb"><div class="rt">${esc(holName(S.day))}</div><div class="rm">Feiertag</div></div></div>` : ''}
+    ${evs.length ? evs.map(e => itemRow(e, S.day)).join('') : (holName(S.day) ? '' : '<div class="empty">Keine Einträge an diesem Tag.<br>Mit ＋ einen anlegen.</div>')}`;
 }
 
 /* ---------- Liste aller ToDos ---------- */
 function todoView() {
   const cats = ['Alle', ...CATS].map(c => `<button class="chip ${S.cat === c ? 'on' : ''}" data-act="cat" data-c="${c}">${c === 'Alle' ? 'Alle' : ICON[c] + ' ' + c}</button>`).join('');
   const stat = [['open', 'Offen'], ['all', 'Alle'], ['done', 'Erledigt']].map(([k, l]) => `<button class="${S.status === k ? 'on' : ''}" data-act="status" data-s="${k}">${l}</button>`).join('');
-  return `<input id="iq" placeholder="🔍 ToDos durchsuchen" value="${esc(S.iq)}" style="margin-bottom:10px">
+  return `${peopleBar()}<input id="iq" placeholder="🔍 ToDos durchsuchen" value="${esc(S.iq)}" style="margin-bottom:10px">
     <div class="seg">${stat}</div>
     <div class="chips">${cats}</div>
     ${itemTagChips()}
@@ -393,7 +458,7 @@ function todoView() {
 function todoList() {
   const today = ymd(new Date());
   const q = S.iq.trim().toLowerCase();
-  const list = S.items.filter(i => (S.cat === 'Alle' || i.category === S.cat) && tagOk(i) &&
+  const list = S.items.filter(i => (S.cat === 'Alle' || i.category === S.cat) && itemOk(i) &&
     (!q || [i.title, i.body, ...(i.tags || []), ...(i.subtasks || []).map(s => s.text)].join(' ').toLowerCase().includes(q)));
   const isDone = i => i.done && i.category !== 'Geburtstag';
   const open = list.filter(i => !isDone(i));
@@ -467,6 +532,8 @@ document.addEventListener('click', async e => {
   else if (a === 'today') { const n = new Date(); S.month = new Date(n.getFullYear(), n.getMonth(), 1); S.day = ymd(n); render(); }
   else if (a === 'day') { S.day = el.dataset.d; const d = parseD(S.day); S.month = new Date(d.getFullYear(), d.getMonth(), 1); render(); }
   else if (a === 'cat') { S.cat = el.dataset.c; render(); }
+  else if (a === 'who') { const pid = +el.dataset.p; S.who = S.who.includes(pid) ? S.who.filter(x => x !== pid) : [...S.who, pid]; render(); }
+  else if (a === 'whoreset') { S.who = []; render(); }
   else if (a === 'status') { S.status = el.dataset.s; render(); }
   else if (a === 'itag') { S.itemTag = S.itemTag === el.dataset.t ? null : el.dataset.t; render(); }
   else if (a === 'tag') { S.tag = S.tag === el.dataset.t ? null : el.dataset.t; render(); }
@@ -506,6 +573,13 @@ function openUser() {
   const sh = showModal('Konto', `
     <div>Angemeldet als <b>${esc(S.name)}</b></div>
     <div class="card" style="margin:0">
+      <h4>👥 Beteiligte</h4>
+      <p class="hint" style="margin:6px 0 10px">Namen der vier Beteiligten. Sie gelten für beide Handys.</p>
+      ${S.people.map(p => `<div class="sr"><i class="dotc" style="background:${PCOL[p.id]}"></i><input data-pid="${p.id}" value="${esc(p.name)}" maxlength="14" autocomplete="off"></div>`).join('')}
+      <button class="btn2" data-m="savepeople" style="margin-top:6px">Namen speichern</button>
+    </div>
+    <label class="inl"><input type="checkbox" id="u-hol" ${HOL_ON ? 'checked' : ''}> 🎉 Feiertage im Kalender anzeigen (Niedersachsen)</label>
+    <div class="card" style="margin:0">
       <h4>📆 Kalender abonnieren</h4>
       <p class="hint" style="margin:6px 0 10px">Erinnerungen kommen über deinen Handy-Kalender (z. B. Google Kalender oder Apple Kalender). Trage den geheimen Token ein, den du in Supabase als <b>CALENDAR_TOKEN</b> gesetzt hast. Er wird nur auf diesem Gerät gespeichert.</p>
       <input id="u-token" value="${esc(tok)}" placeholder="Geheimer Token" autocapitalize="off" autocomplete="off">
@@ -517,6 +591,12 @@ function openUser() {
     <button class="danger" data-m="logout">Abmelden</button>
     ${usePlaceholder ? `<button class="btn2" data-m="resetcfg">Supabase-Verbindung zurücksetzen</button>` : ''}`);
   sh.querySelector('[data-m=save]').style.display = 'none';
+  sh.addEventListener('change', e => {
+    if (e.target.id !== 'u-hol') return;
+    HOL_ON = e.target.checked;
+    try { localStorage.setItem('notizen_hol', HOL_ON ? '1' : '0'); } catch (err) {}
+    render();
+  });
   const feedUrl = () => {
     const t = $('#u-token', sh).value.trim();
     if (!t) { toast('Bitte zuerst den Token eintragen.'); return null; }
@@ -528,6 +608,14 @@ function openUser() {
     if (m === 'close') closeModal();
     if (m === 'logout') { await sb.auth.signOut(); location.reload(); }
     if (m === 'resetcfg') { localStorage.removeItem(CFG_KEY); await sb.auth.signOut(); location.reload(); }
+    if (m === 'savepeople') {
+      const rows = [...sh.querySelectorAll('[data-pid]')].map(inp => ({ id: +inp.dataset.pid, name: inp.value.trim().slice(0, 14) }));
+      if (rows.some(r => !r.name)) { toast('Bitte alle vier Namen ausfüllen.'); return; }
+      const res = await Promise.all(rows.map(r => sb.from('people').update({ name: r.name }).eq('id', r.id)));
+      const bad = res.find(x => x.error);
+      if (bad) { toast('Namen konnten nicht gespeichert werden: ' + bad.error.message); return; }
+      toast('Namen gespeichert.'); load();
+    }
     if (m === 'copyfeed' || m === 'openfeed') {
       if (sb.__demo) { toast('In der Demo nicht verfügbar – es gibt hier keine Verbindung zu Supabase.'); return; }
       const u = feedUrl(); if (!u) return;
@@ -540,8 +628,12 @@ function openUser() {
 /* ---------- Editor: Aufgabe / Termin ---------- */
 function openTodo(id, presetDate) {
   const src = id ? S.items.find(x => x.id === id) : null;
-  const d = src ? structuredClone(src) : { title: '', category: 'Aufgabe', body: '', subtasks: [], links: [], tags: [], date: presetDate || null, time: null, done: false };
+  const d = src ? structuredClone(src) : { title: '', category: 'Aufgabe', body: '', subtasks: [], links: [], tags: [], people: S.who.slice(), date: presetDate || null, time: null, end_time: null, color: null, done: false };
+  d.people = Array.isArray(d.people) ? d.people : [];
   const catsHtml = () => CATS.map(c => `<button type="button" class="chip ${d.category === c ? 'on' : ''}" data-m="cat" data-c="${c}">${ICON[c]} ${c}</button>`).join('');
+  const colorHtml = () => `<button type="button" class="sw std ${d.color ? '' : 'on'}" data-m="color" data-col="" title="Standard (Farbe der Kategorie)" aria-label="Standardfarbe"><i style="background:var(--c-${d.category})"></i></button>`
+    + COLORS.map(([c, n]) => `<button type="button" class="sw ${d.color === c ? 'on' : ''}" data-m="color" data-col="${c}" title="${n}" aria-label="${n}"><i style="background:${c}"></i></button>`).join('');
+  const peopleHtml = () => S.people.map(p => `<button type="button" class="chip pc ${d.people.includes(p.id) ? 'on' : ''}" style="--wc:${PCOL[p.id]}" data-m="person" data-p="${p.id}"><i></i>${esc(p.name)}</button>`).join('');
   const allTags = [...new Set(S.items.flatMap(i => i.tags || []))].sort((a, b) => a.localeCompare(b, 'de'));
   const sug = () => allTags.map(t => `<button type="button" class="chip" data-m="tagsug" data-t="${esc(t)}">#${esc(t)}</button>`).join('');
   const subsHtml = () => d.subtasks.map((s, i) => `<div class="sr"><input type="checkbox" data-sti="${i}" data-k="done" ${s.done ? 'checked' : ''}><input data-sti="${i}" data-k="text" value="${esc(s.text)}"><button type="button" data-m="delsub" data-i="${i}">✕</button></div>`).join('');
@@ -549,10 +641,13 @@ function openTodo(id, presetDate) {
   const sh = showModal(src ? 'Bearbeiten' : 'Neuer Eintrag', `
     <label class="l">Titel<input id="f-title" value="${esc(d.title)}" placeholder="Was steht an?"></label>
     <div><div class="chips" id="f-cats">${catsHtml()}</div><div class="hint" id="f-hint"></div></div>
-    <div class="two"><label class="l">Datum<input type="date" id="f-date" value="${d.date || ''}"></label>
-      <label class="l">Uhrzeit<input type="time" id="f-time" value="${(d.time || '').slice(0, 5)}"></label></div>
+    <div><h4>Farbe</h4><div class="sws" id="f-color">${colorHtml()}</div><div class="hint" style="margin-top:6px">Gestrichelt = Standardfarbe der Kategorie</div></div>
+    <label class="l">Datum<input type="date" id="f-date" value="${d.date || ''}"></label>
+    <div class="two"><label class="l">Von<input type="time" id="f-time" value="${(d.time || '').slice(0, 5)}"></label>
+      <label class="l">Bis<input type="time" id="f-endtime" value="${(d.end_time || '').slice(0, 5)}"></label></div>
     <div><label class="l">Tags (durch Komma getrennt)<input id="f-tags" value="${esc((d.tags || []).join(', '))}" placeholder="z. B. Haus, Familie" autocapitalize="off"></label>
       ${allTags.length ? `<div class="chips" style="margin:8px 0 0">${sug()}</div>` : ''}</div>
+    <div><h4>Beteiligte</h4><div class="chips" id="f-people" style="margin:8px 0 0">${peopleHtml()}</div></div>
     <label class="l">Freitext<textarea id="f-body">${esc(d.body)}</textarea></label>
     <div><h4>Unteraufgaben</h4><div id="f-subs" style="margin-top:8px">${subsHtml()}</div>
       <div class="add"><input id="f-subnew" placeholder="Neue Unteraufgabe"><button type="button" data-m="addsub">+</button></div></div>
@@ -578,12 +673,14 @@ function openTodo(id, presetDate) {
     const b = e.target.closest('[data-m]'); if (!b) return;
     const m = b.dataset.m, i = +b.dataset.i;
     if (m === 'close') closeModal();
-    else if (m === 'cat') { d.category = b.dataset.c; $('#f-cats', sh).innerHTML = catsHtml(); hint(); }
+    else if (m === 'cat') { d.category = b.dataset.c; $('#f-cats', sh).innerHTML = catsHtml(); $('#f-color', sh).innerHTML = colorHtml(); hint(); }
+    else if (m === 'color') { d.color = b.dataset.col || null; $('#f-color', sh).innerHTML = colorHtml(); }
     else if (m === 'tagsug') {
       const inp = $('#f-tags', sh), t = b.dataset.t;
       const cur = inp.value.split(',').map(s => s.trim().replace(/^#/, '')).filter(Boolean);
       inp.value = (cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]).join(', ');
     }
+    else if (m === 'person') { const pid = +b.dataset.p; d.people = d.people.includes(pid) ? d.people.filter(x => x !== pid) : [...d.people, pid].sort(); $('#f-people', sh).innerHTML = peopleHtml(); }
     else if (m === 'addsub') addSub();
     else if (m === 'delsub') { d.subtasks.splice(i, 1); $('#f-subs', sh).innerHTML = subsHtml(); }
     else if (m === 'addlink') addLink();
@@ -597,19 +694,23 @@ function openTodo(id, presetDate) {
     else if (m === 'save') {
       const title = $('#f-title', sh).value.trim();
       if (!title) { toast('Bitte einen Titel eingeben.'); return; }
+      const tFrom = $('#f-time', sh).value, tTo = $('#f-endtime', sh).value;
+      if (tTo && !tFrom) { toast('Bitte zuerst die Uhrzeit „Von“ eintragen.'); return; }
+      if (tTo && tFrom && tTo <= tFrom) { toast('Das Ende („Bis“) muss nach dem Beginn („Von“) liegen.'); return; }
       addSub(); addLink();
       const row = {
         title, category: d.category, body: $('#f-body', sh).value,
         tags: [...new Set($('#f-tags', sh).value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))],
+        people: d.people,
         subtasks: d.subtasks.filter(s => s.text.trim()), links: d.links,
-        date: $('#f-date', sh).value || null, time: $('#f-time', sh).value || null,
+        date: $('#f-date', sh).value || null, time: tFrom || null, end_time: tFrom && tTo ? tTo : null, color: d.color || null,
         done: $('#f-done', sh).checked, updated_by: S.name, updated_at: new Date().toISOString()
       };
       b.disabled = true;
       const res = src ? await sb.from('items').update(row).eq('id', id)
                       : await sb.from('items').insert({ ...row, created_by: S.name });
       b.disabled = false;
-      if (res.error) return toast(res.error.message);
+      if (res.error) return toast(/column|schema cache/i.test(res.error.message) ? 'Datenbank noch nicht aktualisiert – bitte supabase_times_colors.sql in Supabase ausführen.' : res.error.message);
       if (row.date) { const dd = parseD(row.date); S.day = row.date; S.month = new Date(dd.getFullYear(), dd.getMonth(), 1); }
       closeModal(); load();
     }
